@@ -64,3 +64,59 @@ class AllLoanedBooksListView(PermissionRequiredMixin,generic.ListView):
 
     def get_queryset(self):
         return BookInstance.objects.filter(status__exact='o').order_by('due_back')
+
+from django.contrib.auth.decorators import permission_required
+
+from django.shortcuts import get_object_or_404
+from django.http import HttpResponseRedirect
+from django.core.urlresolvers import reverse
+import datetime
+
+from .forms import RenewBookForm
+
+@permission_required('catalog.can_mark_returned')
+def renew_book_librarian(request, pk):
+    """
+    View function for renewing a specific BookInstance by Librarian
+    """
+    book_inst=get_object_or_404(BookInstance, pk = pk)
+
+    #If POST request then process the Form data
+    if request.method == "POST":
+
+        #Create a forms instance and populate it with data from the request (aka binding)
+        form = RenewBookForm(request.POST)
+
+        #check if the form is valid
+        if form.is_valid():
+            #process the data in the form.cleaned_data as required (In this case write it to the model due_back field)
+            book_inst.due_back = form.cleaned_data['renewal_date']
+            book_inst.save()
+
+            #redirect to a new URL
+            return HttpResponseRedirect(reverse('all-borrowed'))
+
+    #If the request is a GET request or any other method create the default form
+    else:
+        proposed_renewal_date = datetime.date.today() + datetime.timedelta(weeks=3)
+        form = RenewBookForm(initial={'renewal_date': proposed_renewal_date,})
+
+    return render(request, 'catalog/book_renew_librarian.html', {'form': form, 'bookinst':book_inst})
+
+from django.views.generic.edit import CreateView, UpdateView, DeleteView
+from django.urls import reverse_lazy
+from .models import Author
+
+class AuthorCreate(CreateView):
+    model = Author
+    fields = '__all__'
+    # Initial lets you prepopulate a form with data. In this instance it is not the best idea thoughs
+    initial = {'date_of_death':'12/10/2016',}
+
+class AuthorUpdate(UpdateView):
+    model = Author
+    success_url = reverse_lazy('authors')
+
+class AuthorDelete(DeleteView):
+    model = Author
+    success_url = reverse_lazy('authors')
